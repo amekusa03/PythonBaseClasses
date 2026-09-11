@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from BaseNodeObject import BaseNodeObject, FileNodeObject, DirectoryNodeObject, format_size
 from FilerRepository import FilerRepository
+from i18n import i18n, t
 
 def format_datetime(timestamp):
     try:
@@ -32,9 +33,6 @@ class NumericTableWidgetItem(QTableWidgetItem):
 class FilerMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Antigravity Filer")
-        self.resize(1150, 720)
-        
         self.repository = FilerRepository()
         self.current_directory_path = ""
         self.current_nodes = []
@@ -47,6 +45,10 @@ class FilerMainWindow(QMainWindow):
         self.init_ui()
         self.apply_styles()
         
+        # Register for i18n changes
+        i18n.add_listener(self.retranslate_ui)
+        self.retranslate_ui()
+        
         # Navigate to home directory by default
         home_path = os.path.expanduser("~")
         if os.path.exists(home_path):
@@ -55,6 +57,7 @@ class FilerMainWindow(QMainWindow):
             self.navigate_to("/")
 
     def init_ui(self):
+        self.resize(1180, 740)
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -66,43 +69,40 @@ class FilerMainWindow(QMainWindow):
         top_bar.setSpacing(8)
         
         self.btn_back = QPushButton("◀")
-        self.btn_back.setToolTip("Back")
         self.btn_back.setFixedWidth(40)
         self.btn_back.clicked.connect(self.navigate_back)
         
         self.btn_forward = QPushButton("▶")
-        self.btn_forward.setToolTip("Forward")
         self.btn_forward.setFixedWidth(40)
         self.btn_forward.clicked.connect(self.navigate_forward)
         
         self.btn_up = QPushButton("▲")
-        self.btn_up.setToolTip("Up to parent folder")
         self.btn_up.setFixedWidth(40)
         self.btn_up.clicked.connect(self.navigate_up)
         
         self.btn_refresh = QPushButton("🔄")
-        self.btn_refresh.setToolTip("Refresh current folder")
         self.btn_refresh.setFixedWidth(40)
         self.btn_refresh.clicked.connect(self.refresh_directory)
 
         self.btn_new_folder = QPushButton("📁+")
-        self.btn_new_folder.setToolTip("Create New Folder")
-        self.btn_new_folder.setFixedWidth(40)
+        self.btn_new_folder.setFixedWidth(44)
         self.btn_new_folder.clicked.connect(self.create_folder)
 
         self.btn_new_file = QPushButton("📄+")
-        self.btn_new_file.setToolTip("Create New File")
-        self.btn_new_file.setFixedWidth(40)
+        self.btn_new_file.setFixedWidth(44)
         self.btn_new_file.clicked.connect(self.create_file_item)
         
         self.path_bar = QLineEdit()
-        self.path_bar.setPlaceholderText("Enter folder path...")
         self.path_bar.returnPressed.connect(self.on_path_bar_entered)
         
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("🔍 Filter files...")
         self.search_bar.setFixedWidth(180)
         self.search_bar.textChanged.connect(self.filter_table)
+        
+        # Language Switch Button
+        self.btn_lang = QPushButton("🌐")
+        self.btn_lang.setMinimumWidth(85)
+        self.btn_lang.clicked.connect(self.toggle_app_language)
         
         top_bar.addWidget(self.btn_back)
         top_bar.addWidget(self.btn_forward)
@@ -112,6 +112,7 @@ class FilerMainWindow(QMainWindow):
         top_bar.addWidget(self.btn_new_file)
         top_bar.addWidget(self.path_bar, stretch=1)
         top_bar.addWidget(self.search_bar)
+        top_bar.addWidget(self.btn_lang)
         
         main_layout.addLayout(top_bar)
         
@@ -128,7 +129,6 @@ class FilerMainWindow(QMainWindow):
         # 2. Central Files Table
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["", "Name", "Type", "Size", "Date Modified"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
@@ -157,22 +157,27 @@ class FilerMainWindow(QMainWindow):
         self.splitter.addWidget(self.details_panel)
         
         # Set initial splitter proportions (Sidebar: 15%, Table: 60%, Details: 25%)
-        self.splitter.setSizes([160, 640, 260])
+        self.splitter.setSizes([170, 630, 280])
         
         main_layout.addWidget(self.splitter)
         
         # --- Status Bar ---
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
 
     def setup_sidebar_shortcuts(self):
+        current_selected_path = None
+        current_item = self.sidebar.currentItem()
+        if current_item:
+            current_selected_path = current_item.data(Qt.UserRole)
+
+        self.sidebar.clear()
         shortcuts = [
-            ("🏠 Home", os.path.expanduser("~")),
-            ("📄 Documents", os.path.expanduser("~/Documents")),
-            ("📥 Downloads", os.path.expanduser("~/Downloads")),
-            ("🖥️ Desktop", os.path.expanduser("~/Desktop")),
-            ("💾 Root (/) ", "/"),
+            (t("shortcut_home"), os.path.expanduser("~")),
+            (t("shortcut_documents"), os.path.expanduser("~/Documents")),
+            (t("shortcut_downloads"), os.path.expanduser("~/Downloads")),
+            (t("shortcut_desktop"), os.path.expanduser("~/Desktop")),
+            (t("shortcut_root"), "/"),
         ]
         
         for name, path in shortcuts:
@@ -180,6 +185,8 @@ class FilerMainWindow(QMainWindow):
                 item = QListWidgetItem(name)
                 item.setData(Qt.UserRole, path)
                 self.sidebar.addItem(item)
+                if current_selected_path and current_selected_path == path:
+                    item.setSelected(True)
 
     def setup_details_panel(self):
         layout = QVBoxLayout(self.details_panel)
@@ -187,14 +194,14 @@ class FilerMainWindow(QMainWindow):
         layout.setSpacing(14)
         
         # Title Label
-        title_label = QLabel("Item Details")
+        self.title_label = QLabel("Item Details")
         font = QFont()
         font.setBold(True)
         font.setPointSize(12)
-        title_label.setFont(font)
-        title_label.setStyleSheet("color: #7aa2f7; margin-bottom: 4px;")
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
+        self.title_label.setFont(font)
+        self.title_label.setStyleSheet("color: #7aa2f7; margin-bottom: 4px;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
         
         # Large Icon Display
         self.detail_icon = QLabel("📁")
@@ -241,6 +248,51 @@ class FilerMainWindow(QMainWindow):
         self.btn_delete_item.clicked.connect(self.on_delete_clicked_from_details)
         layout.addWidget(self.btn_delete_item)
 
+    def toggle_app_language(self):
+        i18n.toggle_language()
+
+    def retranslate_ui(self):
+        # Window & Tooltips
+        self.setWindowTitle(t("app_title"))
+        self.btn_back.setToolTip(t("nav_back"))
+        self.btn_forward.setToolTip(t("nav_forward"))
+        self.btn_up.setToolTip(t("nav_up"))
+        self.btn_refresh.setToolTip(t("nav_refresh"))
+        self.btn_new_folder.setToolTip(t("btn_new_folder"))
+        self.btn_new_file.setToolTip(t("btn_new_file"))
+        self.btn_lang.setText(f"🌐 {t('lang_name')}")
+        self.btn_lang.setToolTip(t("toggle_language"))
+        
+        # Placeholders
+        self.path_bar.setPlaceholderText(t("path_placeholder"))
+        self.search_bar.setPlaceholderText(t("search_placeholder"))
+        
+        # Table Headers
+        self.table.setHorizontalHeaderLabels([
+            t("col_select"),
+            t("col_name"),
+            t("col_type"),
+            t("col_size"),
+            t("col_modified")
+        ])
+        
+        # Sidebar Shortcuts
+        self.setup_sidebar_shortcuts()
+        
+        # Details Panel
+        self.title_label.setText(t("details_title"))
+        self.detail_select_checkbox.setText(t("mark_selected"))
+        self.btn_delete_item.setText(t("btn_delete_item"))
+        
+        if self.selected_node:
+            self.show_details(self.selected_node)
+        else:
+            self.clear_details_panel()
+            
+        # Re-render table cells to reflect localized type names
+        self.populate_table()
+        self.update_status_bar()
+
     def apply_styles(self):
         qss = """
         QMainWindow {
@@ -249,7 +301,7 @@ class FilerMainWindow(QMainWindow):
         
         QWidget {
             color: #c0caf5;
-            font-family: 'Segoe UI', 'Inter', 'Roboto', sans-serif;
+            font-family: 'Segoe UI', 'Inter', 'Noto Sans JP', 'Roboto', sans-serif;
             font-size: 13px;
         }
         
@@ -431,7 +483,7 @@ class FilerMainWindow(QMainWindow):
     def navigate_to(self, path, push_history=True):
         path = os.path.abspath(path)
         if not os.path.exists(path) or not os.path.isdir(path):
-            QMessageBox.warning(self, "Navigation Error", f"The directory does not exist:\n{path}")
+            QMessageBox.warning(self, t("error_nav_title"), t("error_nav_msg", path=path))
             return
         
         # Save history
@@ -448,7 +500,6 @@ class FilerMainWindow(QMainWindow):
         dir_node = self.repository.get_directory_node(path)
         self.current_nodes = dir_node.children
         
-        # Sort current nodes: Directories first, then Files alphabetically
         def sort_key(node):
             is_dir = isinstance(node, DirectoryNodeObject)
             return (0 if is_dir else 1, node.name.lower())
@@ -480,19 +531,19 @@ class FilerMainWindow(QMainWindow):
             chk_item.setData(Qt.UserRole + 1, node)
             self.table.setItem(row, 0, chk_item)
             
-            # Name (Icon is now a property on node)
+            # Name
             name_item = QTableWidgetItem(f"{node.icon}  {node.name}")
             self.table.setItem(row, 1, name_item)
             
-            # Type (Type description is now a property on node)
+            # Type
             type_item = QTableWidgetItem(node.type_name)
             self.table.setItem(row, 2, type_item)
             
-            # Size (Size string and numeric size are properties on node)
+            # Size
             size_item = NumericTableWidgetItem(node.size_str, node.size)
             self.table.setItem(row, 3, size_item)
             
-            # Date Modified (Timestamp is now a property on node)
+            # Date Modified
             mtime = node.modified_time
             mtime_str = format_datetime(mtime)
             mtime_item = NumericTableWidgetItem(mtime_str, mtime)
@@ -553,13 +604,13 @@ class FilerMainWindow(QMainWindow):
         self.selected_node = node
         
         self.detail_icon.setText(node.icon)
-        self.detail_name.setText(f"<b>Name:</b> {node.name}")
-        self.detail_type.setText(f"<b>Type:</b> {node.type_name}")
-        self.detail_size.setText(f"<b>Size:</b> {node.size_str}")
-        self.detail_path.setText(f"<b>Path:</b> {node.path}")
+        self.detail_name.setText(f"<b>{t('lbl_name')}:</b> {node.name}")
+        self.detail_type.setText(f"<b>{t('lbl_type')}:</b> {node.type_name}")
+        self.detail_size.setText(f"<b>{t('lbl_size')}:</b> {node.size_str}")
+        self.detail_path.setText(f"<b>{t('lbl_path')}:</b> {node.path}")
         
-        self.detail_created.setText(f"<b>Created:</b> {format_datetime(node.created_time)}")
-        self.detail_modified.setText(f"<b>Modified:</b> {format_datetime(node.modified_time)}")
+        self.detail_created.setText(f"<b>{t('lbl_created')}:</b> {format_datetime(node.created_time)}")
+        self.detail_modified.setText(f"<b>{t('lbl_modified')}:</b> {format_datetime(node.modified_time)}")
         
         self.detail_select_checkbox.setEnabled(True)
         self.detail_select_checkbox.blockSignals(True)
@@ -568,28 +619,28 @@ class FilerMainWindow(QMainWindow):
         
         self.btn_open_item.setEnabled(True)
         if isinstance(node, DirectoryNodeObject):
-            self.btn_open_item.setText("Open Folder")
+            self.btn_open_item.setText(t("btn_open_folder"))
         else:
-            self.btn_open_item.setText("Open File")
+            self.btn_open_item.setText(t("btn_open_file"))
 
         self.btn_delete_item.setEnabled(True)
 
     def clear_details_panel(self):
         self.selected_node = None
         self.detail_icon.setText("📁")
-        self.detail_name.setText("Name: -")
-        self.detail_type.setText("Type: -")
-        self.detail_size.setText("Size: -")
-        self.detail_path.setText("Path: -")
-        self.detail_created.setText("Created: -")
-        self.detail_modified.setText("Modified: -")
+        self.detail_name.setText(f"{t('lbl_name')}: -")
+        self.detail_type.setText(f"{t('lbl_type')}: -")
+        self.detail_size.setText(f"{t('lbl_size')}: -")
+        self.detail_path.setText(f"{t('lbl_path')}: -")
+        self.detail_created.setText(f"{t('lbl_created')}: -")
+        self.detail_modified.setText(f"{t('lbl_modified')}: -")
         
         self.detail_select_checkbox.blockSignals(True)
         self.detail_select_checkbox.setChecked(False)
         self.detail_select_checkbox.setEnabled(False)
         self.detail_select_checkbox.blockSignals(False)
         
-        self.btn_open_item.setText("Open File / Folder")
+        self.btn_open_item.setText(t("btn_open_file_or_folder"))
         self.btn_open_item.setEnabled(False)
 
         self.btn_delete_item.setEnabled(False)
@@ -613,7 +664,7 @@ class FilerMainWindow(QMainWindow):
         try:
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
         except Exception as e:
-            QMessageBox.warning(self, "Error Opening File", f"Could not open file:\n{path}\n\nError: {str(e)}")
+            QMessageBox.warning(self, t("error_open_title"), t("error_open_msg", path=path, error=str(e)))
 
     def navigate_back(self):
         if self.history_back:
@@ -678,10 +729,10 @@ class FilerMainWindow(QMainWindow):
             selected_size = sum(node.size for node in selected_nodes if isinstance(node, FileNodeObject))
             size_str = format_size(selected_size)
             self.status_bar.showMessage(
-                f"Total: {total_items} items | Selected: {selected_count} items ({size_str})"
+                t("status_total_selected", total=total_items, selected=selected_count, size=size_str)
             )
         else:
-            self.status_bar.showMessage(f"Total: {total_items} items")
+            self.status_bar.showMessage(t("status_total", total=total_items))
 
     def on_sidebar_clicked(self, item):
         path = item.data(Qt.UserRole)
@@ -722,15 +773,15 @@ class FilerMainWindow(QMainWindow):
                 node = chk_item.data(Qt.UserRole + 1)
                 
         if node:
-            action_open = menu.addAction("Open")
-            action_rename = menu.addAction("Rename...")
-            action_delete = menu.addAction("Delete")
+            action_open = menu.addAction(t("menu_open"))
+            action_rename = menu.addAction(t("menu_rename"))
+            action_delete = menu.addAction(t("menu_delete"))
             menu.addSeparator()
             
-            action_new_folder = menu.addAction("New Folder...")
-            action_new_file = menu.addAction("New File...")
+            action_new_folder = menu.addAction(t("menu_new_folder"))
+            action_new_file = menu.addAction(t("menu_new_file"))
             menu.addSeparator()
-            action_refresh = menu.addAction("Refresh")
+            action_refresh = menu.addAction(t("menu_refresh"))
             
             selected_action = menu.exec(self.table.mapToGlobal(pos))
             
@@ -750,10 +801,10 @@ class FilerMainWindow(QMainWindow):
             elif selected_action == action_refresh:
                 self.refresh_directory()
         else:
-            action_new_folder = menu.addAction("New Folder...")
-            action_new_file = menu.addAction("New File...")
+            action_new_folder = menu.addAction(t("menu_new_folder"))
+            action_new_file = menu.addAction(t("menu_new_file"))
             menu.addSeparator()
-            action_refresh = menu.addAction("Refresh")
+            action_refresh = menu.addAction(t("menu_refresh"))
             
             selected_action = menu.exec(self.table.mapToGlobal(pos))
             
@@ -766,18 +817,18 @@ class FilerMainWindow(QMainWindow):
 
     def rename_node(self, node):
         new_name, ok = QInputDialog.getText(
-            self, "Rename", f"Enter new name for '{node.name}':", text=node.name
+            self, t("dialog_rename_title"), t("dialog_rename_prompt", name=node.name), text=node.name
         )
         if ok and new_name.strip() and new_name.strip() != node.name:
             success = self.repository.rename_node(node.path, new_name.strip())
             if success:
                 self.refresh_directory()
             else:
-                QMessageBox.critical(self, "Error", f"Failed to rename '{node.name}'.")
+                QMessageBox.critical(self, t("error_title"), t("error_rename", name=node.name))
 
     def delete_node(self, node):
         reply = QMessageBox.question(
-            self, "Confirm Delete", f"Are you sure you want to delete '{node.name}'?\nThis action cannot be undone.",
+            self, t("dialog_confirm_delete_title"), t("dialog_confirm_delete_msg", name=node.name),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -788,29 +839,29 @@ class FilerMainWindow(QMainWindow):
                     self.clear_details_panel()
                 self.refresh_directory()
             else:
-                QMessageBox.critical(self, "Error", f"Failed to delete '{node.name}'.")
+                QMessageBox.critical(self, t("error_title"), t("error_delete", name=node.name))
 
     def create_folder(self):
         folder_name, ok = QInputDialog.getText(
-            self, "New Folder", "Enter folder name:"
+            self, t("dialog_new_folder_title"), t("dialog_new_folder_prompt")
         )
         if ok and folder_name.strip():
             success = self.repository.create_directory(self.current_directory_path, folder_name.strip())
             if success:
                 self.refresh_directory()
             else:
-                QMessageBox.critical(self, "Error", f"Failed to create folder '{folder_name}'.")
+                QMessageBox.critical(self, t("error_title"), t("error_create_folder", name=folder_name))
 
     def create_file_item(self):
         file_name, ok = QInputDialog.getText(
-            self, "New File", "Enter file name:"
+            self, t("dialog_new_file_title"), t("dialog_new_file_prompt")
         )
         if ok and file_name.strip():
             success = self.repository.create_file(self.current_directory_path, file_name.strip())
             if success:
                 self.refresh_directory()
             else:
-                QMessageBox.critical(self, "Error", f"Failed to create file '{file_name}'.")
+                QMessageBox.critical(self, t("error_title"), t("error_create_file", name=file_name))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

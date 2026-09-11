@@ -1,5 +1,6 @@
 from PySide6.QtCore import QObject, Signal
 import os
+from i18n import t
 
 def format_size(size_bytes: int) -> str:
     if size_bytes == 0:
@@ -55,7 +56,7 @@ class BaseNodeObject(QObject):
 
     @property
     def type_name(self) -> str:
-        return "File"
+        return t("type_file")
 
     @property
     def size_str(self) -> str:
@@ -100,26 +101,27 @@ class FileNodeObject(BaseNodeObject):
     @property
     def type_name(self) -> str:
         ext = self.extension.lower()
+        ext_label = ext[1:].upper() if ext else ""
         if ext in ['.zip', '.tar', '.gz', '.bz2', '.xz', '.rar', '.7z']:
-            return f"{ext[1:].upper()} Archive"
+            return t("type_archive", ext=ext_label)
         elif ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp']:
-            return f"{ext[1:].upper()} Image"
+            return t("type_image", ext=ext_label)
         elif ext in ['.mp3', '.wav', '.ogg', '.flac', '.m4a']:
-            return f"{ext[1:].upper()} Audio"
+            return t("type_audio", ext=ext_label)
         elif ext in ['.mp4', '.mkv', '.avi', '.mov', '.wmv']:
-            return f"{ext[1:].upper()} Video"
+            return t("type_video", ext=ext_label)
         elif ext in ['.py', '.js', '.ts', '.html', '.css', '.cpp', '.c', '.h', '.go', '.rs', '.java', '.sh', '.bat']:
-            return f"{ext[1:].upper()} Script/Code"
+            return t("type_code", ext=ext_label)
         elif ext in ['.txt', '.md', '.ini', '.cfg', '.json', '.yaml', '.yml', '.xml']:
-            return "Text Document"
+            return t("type_text")
         elif ext in ['.pdf']:
-            return "PDF Document"
+            return t("type_pdf")
         elif ext in ['.doc', '.docx', '.odt']:
-            return "Word Document"
+            return t("type_word")
         elif ext in ['.xls', '.xlsx', '.ods']:
-            return "Spreadsheet"
+            return t("type_spreadsheet")
         else:
-            return f"{ext[1:].upper() if ext else 'Unknown'} File" if ext else "File"
+            return t("type_unknown", ext=ext_label) if ext_label else t("type_file")
 
 
 class DirectoryNodeObject(BaseNodeObject):
@@ -135,4 +137,4 @@ class DirectoryNodeObject(BaseNodeObject):
 
     @property
     def type_name(self) -> str:
-        return "Folder"
+        return t("type_folder")
